@@ -1,5 +1,7 @@
 from collections import deque
 import re
+from copy import deepcopy
+from itertools import islice
 
 INPUT_FILE = "input.txt"
 
@@ -36,19 +38,40 @@ def main():
     commands = []
     for line in lines:
         digits = re.compile(r'\d+')
-        commands.append(int(d) for d in digits.findall(line))
+        commands.append([int(d) for d in digits.findall(line)])
 
+    #
+    # Part 1
+    #
+    columns_cpy = deepcopy(columns)
     for move_n, _move_from, _move_to in commands:
         # Make the `move_from` and `move_to` 0-indexed
         move_from = _move_from - 1
         move_to = _move_to - 1
 
-        # Move the n creates from `move_from` left to `move_to` left
+        # Move the n crates from `move_from` left to `move_to` left
         for _ in range(move_n):
-            crate = columns[move_from].popleft()
-            columns[move_to].appendleft(crate)
+            crate = columns_cpy[move_from].popleft()
+            columns_cpy[move_to].appendleft(crate)
 
-    print(''.join(col[0] for col in columns))
+    print("Part 1:", ''.join(col[0] for col in columns_cpy))
+
+    #
+    # Part 2
+    #
+    columns_cpy = deepcopy(columns)
+    for move_n, _move_from, _move_to in commands:
+        # Make the `move_from` and `move_to` 0-indexed
+        move_from = _move_from - 1
+        move_to = _move_to - 1
+
+        # Move the n crates from `move_from` left to `move_to` left all at once
+        crates = reversed([columns_cpy[move_from].popleft() for _ in range(move_n)])
+
+        # The `extendleft` method results in the reversing of the iterable when placed in `columns_cpy`
+        columns_cpy[move_to].extendleft(crates)
+
+    print("Part 2:", ''.join(col[0] for col in columns_cpy))
         
 if __name__ == "__main__":
     main()
