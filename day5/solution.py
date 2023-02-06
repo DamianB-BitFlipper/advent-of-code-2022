@@ -1,7 +1,6 @@
 from collections import deque
 import re
 from copy import deepcopy
-from itertools import islice
 
 INPUT_FILE = "input.txt"
 
