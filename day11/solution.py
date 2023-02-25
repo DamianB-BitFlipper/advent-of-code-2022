@@ -1,11 +1,10 @@
 import operator
 import re
-from itertools import islice
 import time
 
 INPUT_FILE = "input.txt"
 
-class Monkey():
+class MonkeyBase():
 
     def __init__(self, identifier, items, worry_fn, test_fn, true_recipient, false_recipient):
         self.identifier = identifier
@@ -30,12 +29,12 @@ class Monkey():
         lines = map(lambda s: s.strip(), desc.split('\n'))
 
         # The description has specific values at different lines
-        m_monkey_id, = Monkey.match(r'Monkey (\d+):', next(lines), [1])
-        m_monkey_items, = Monkey.match(r'Starting items: ((?:\d+(?:, )?)+)', next(lines), [1])
-        m_worry_op, m_worry_op_val = Monkey.match(r'Operation: new = old ([+*]) (\d+|(?:old))', next(lines), [1, 2])
-        m_test, = Monkey.match(r'Test: divisible by (\d+)', next(lines), [1])
-        m_true_recipient, = Monkey.match(r'If true: throw to monkey (\d+)', next(lines), [1])
-        m_false_recipient, = Monkey.match(r'If false: throw to monkey (\d+)', next(lines), [1])
+        m_monkey_id, = cls.match(r'Monkey (\d+):', next(lines), [1])
+        m_monkey_items, = cls.match(r'Starting items: ((?:\d+(?:, )?)+)', next(lines), [1])
+        m_worry_op, m_worry_op_val = cls.match(r'Operation: new = old ([+*]) (\d+|(?:old))', next(lines), [1, 2])
+        m_test, = cls.match(r'Test: divisible by (\d+)', next(lines), [1])
+        m_true_recipient, = cls.match(r'If true: throw to monkey (\d+)', next(lines), [1])
+        m_false_recipient, = cls.match(r'If false: throw to monkey (\d+)', next(lines), [1])
 
         # Finish parsing the respective values
         monkey_id = int(m_monkey_id)
@@ -61,7 +60,7 @@ class Monkey():
             # Increment the inspection counter
             self.n_inspections += 1
         
-            worry = self.worry_fn(item) // 3
+            worry = self.worry_fn(item)
             should_thow = self.test_fn(worry)
             
             if should_thow:
@@ -72,22 +71,29 @@ class Monkey():
         # All of the items have been thrown, so clear them from our inventory
         self.items = []
     
+class Part1Monkey(MonkeyBase):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # The result of the worry function is divided by 3
+        self._orig_worry_fn = self.worry_fn
+        self.worry_fn = lambda item: self._orig_worry_fn(item) // 3
+    
 class MonkeyGang():
 
     def __init__(self, monkeys):
         self.monkeys = monkeys
 
     def __iter__(self):
-        # Define an infinite iterator
-        while True:
-            # Perform a round of monkey business
-            for monkey in self.monkeys:
-                # Transfer the `item`s to `recipient`s
-                for recipient, item in monkey.throw_items():
-                    self.monkeys[recipient].items.append(item)
-
-            # Yield after a round of monkey business
-            yield
+        return self
+        
+    def __next__(self):
+        # Perform a round of monkey business
+        for monkey in self.monkeys:
+            # Transfer the `item`s to `recipient`s
+            for recipient, item in monkey.throw_items():
+                self.monkeys[recipient].items.append(item)
 
     def __str__(self):
         ret = ''
@@ -95,24 +101,26 @@ class MonkeyGang():
             ret += 'Monkey {}: {}\n'.format(monkey.identifier, ', '.join(map(str, monkey.items)))
 
         return ret
-            
+
+    @property
+    def monkey_business(self):
+        top_trouble_makers = sorted(map(lambda m: m.n_inspections, self.monkeys), reverse=True)
+        return top_trouble_makers[0] * top_trouble_makers[1]
+    
 def main():
     with open(INPUT_FILE, 'r') as f:
         monkey_descs = f.read().split('\n\n')
 
-    monkey_gang = MonkeyGang([Monkey.from_description(md) for md in monkey_descs])
+    monkey_gang = MonkeyGang([Part1Monkey.from_description(md) for md in monkey_descs])
 
     #
     # Part 1
     #
-    # Play 20 rounds of monkey business using `islice`
-    #islice(monkey_gang, 20, None)
+    # Play 20 rounds of monkey business
     for _ in range(20):
-        next(iter(monkey_gang))
-        print(monkey_gang)
-    top_trouble_makers = sorted(map(lambda m: m.n_inspections, monkey_gang.monkeys), reverse=True)
+        next(monkey_gang)
 
-    print("Part 1: ", top_trouble_makers[0] * top_trouble_makers[1])
+    print("Part 1: ", monkey_gang.monkey_business)
         
 if __name__ == "__main__":
     main()
