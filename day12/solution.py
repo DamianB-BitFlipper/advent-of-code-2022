@@ -1,5 +1,8 @@
+from typing import Iterable, Optional
 from dataclasses import dataclass
 from enum import Enum
+from itertools import chain
+from functools import singledispatchmethod
 
 INPUT_FILE = "input.txt"
 
@@ -13,7 +16,7 @@ class Coordinate():
         return f"({self.r}, {self.c})"
 
     def __repr__(self):
-        return str(self)
+        return f"Coord({self.r}, {self.c})"
 
     def __add__(self, other):
         return Coordinate(self.r + other.r, self.c + other.c)
@@ -24,6 +27,65 @@ class Directions(Enum):
     Down  = Coordinate(1, 0)
     Left  = Coordinate(0, -1)
     Right = Coordinate(0, 1)
+
+class FrontiersSet():
+
+    def __init__(self, *, initial: Optional[Iterable[tuple[Coordinate, int]]] = None):
+        # Create two dictionaries, each keyed with each
+        # other to implement a 2-way mapping
+        self.frontier_keyed: dict[int, set[Coordinate]] = {}
+        self.location_keyed: dict[Coordinate, int] = {}
+
+        # Populate the dictionaries with any initial frontiers
+        if initial is not None:
+            for location, frontier in initial:
+                self.location_keyed[location] = frontier
+                
+                # There may be no values yet at this `frontier_keyed_entry`
+                frontier_keyed_entry = self.frontier_keyed.get(frontier, set())
+                self.frontier_keyed[frontier] = frontier_keyed_entry | {location}
+
+    @singledispatchmethod
+    def __contains__(self, val):
+        ...
+
+    @__contains__.register
+    def _(self, val: int):
+        """Probe by frontier."""
+        return val in self.frontier_keyed
+
+    @__contains__.register
+    def _(self, val: Coordinate):
+        """Probe by location."""
+        return val in self.location_keyed
+
+    @singledispatchmethod
+    def __getitem__(self, idx):
+        ...
+
+    @__getitem__.register
+    def _(self, idx: int):
+        """Query by frontier."""
+        return self.frontier_keyed[val]
+
+    @__getitem__.register
+    def _(self, val: Coordinate):
+        """Query by location."""
+        return self.location_keyed[val]
+
+    def __iter__(self):
+        """Iterate as location keyed."""
+        return iter(self.location_keyed.items())
+
+    def __or__(self, other):
+        """Create a new ``FrontiersSet`` combining ``self`` with ``other``."""
+        return FrontiersSet(initial=chain(self, other))
+
+    def __str__(self):
+        return "FrontiersSet(" + ", ".join(f"{loc} @ {f}" for f, loc in self.frontier_keyed.items()) + "}"
+
+    def __repr__(self):
+        return str(self)
     
 class Grid:
 
@@ -110,18 +172,15 @@ class Grid:
         """This is a frontier based algorithm and records all newly discovered locations 
         during ``frontier`` until the end is located.
         """
-        # TODO: Clean this up
         # Base case
-        if self.e_loc in {l for _, l in frontiers_set}:
-            for f, loc in frontiers_set:
-                if loc == self.e_loc:
-                    return f
+        if self.e_loc in frontiers_set:
+            return frontiers_set[self.e_loc]
 
         prev_frontier = frontier - 1
         
         # Fetch all of the coordinates that were reachable within `prev_frontier` steps
-        prev_frontier_locs = [loc for f, loc in frontiers_set if f == prev_frontier]
-
+        prev_frontier_locs = [loc for loc, f in frontiers_set if f == prev_frontier]
+        
         next_locs = set()
         for prev_frontier_loc in prev_frontier_locs:
             for direction in Directions:
@@ -136,24 +195,21 @@ class Grid:
                 if climbing_diff > 1:
                     continue
 
-                # Record the `next_loc`
-                next_locs.add(next_loc)
-
-        # Discard all of the already discovered `next_locs`. They will
-        # have been guaranteed discovered during an earlier frontier    
-        next_locs = filter(lambda loc: loc not in {l for _, l in frontiers_set}, next_locs)
+                # Record the `next_loc` only if is has not been discovered yet
+                if next_loc not in frontiers_set:
+                    next_locs.add(next_loc)
         
         if not next_locs:
             raise RuntimeError(f"The frontier {frontier} found no new locations, but the end location was never discovered.")
 
         # Since each location in `next_locs` was newly discovered during `frontier`, record them as such
-        new_frontiers_set = frontiers_set | {(frontier, next_loc) for next_loc in next_locs}
-
+        new_frontiers_set = frontiers_set | FrontiersSet(initial=map(lambda loc: (loc, frontier), next_locs))
+        
         # Continue on the recursion, solving the next `frontier`
         return self._solve_helper(frontiers_set=new_frontiers_set, frontier=frontier+1)
     
     def solve(self):
-        return self._solve_helper(frontiers_set={(0, self.s_loc)}, frontier=1)
+        return self._solve_helper(frontiers_set=FrontiersSet(initial=[(self.s_loc, 0)]), frontier=1)
                     
 def main():
     with open(INPUT_FILE, 'r') as f:
