@@ -1,3 +1,4 @@
+from more_itertools import chunked
 
 INPUT_FILE = "input.txt"
 
@@ -37,7 +38,7 @@ def main():
     #
     # Part 2
     #
-    groups = [(lines[3 * i], lines[3 * i + 1], lines[3 * i + 2]) for i in range(len(lines) // 3)]
+    groups = chunked(lines, 3)
     badges = map(lambda g: set(g[0]).intersection(*g[1:]), groups)
     priorities = map(lambda c: sum(map(get_priority, c)), badges)
     print("Part 2:", sum(priorities))
