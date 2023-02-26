@@ -27,7 +27,14 @@ class Directions(Enum):
     Down  = Coordinate(1, 0)
     Left  = Coordinate(0, -1)
     Right = Coordinate(0, 1)
+    
+class Movement(Enum):
+    Forwards = 1
+    Backwards = -1
 
+    def __mul__(self, other):
+        return self.value * other
+    
 class FrontiersSet():
 
     def __init__(self, *, initial: Optional[Iterable[tuple[Coordinate, Coordinate, int]]] = None):
@@ -150,71 +157,13 @@ class GridSolver(Grid):
                     # The start has the height `a`
                     self._grid[r][c] = ord('a')                    
                     self.s_loc = Coordinate(r, c)
-                    
-    def _solve_helper_reverse(self, loc, acc_path):
-        """Find the shortest distance from ``self.s_loc`` to ``loc``. It starts backwards
-        from the end until it gets to the starting position. In effect, this algorithm tries
-        all possible paths between the end and any point which makes it rather inefficient.
+
+    def _solve_frontiers_set_helper(self, frontiers_set, *, frontier, movement=Movement.Forwards):
+        """Solves for and records all newly discovered locations during the current ``frontier``.
+        
+        The ``movement`` delineates if the frontier advancement is from start to end (``Forwards``)
+        or from the end to the start (``Backwards``).
         """
-        # Base case `loc` is the `self.s_loc`
-        if loc == self.s_loc:
-            return 0
-
-        preceding_locs = []
-        for direction in Directions:
-            preceding_loc = loc + direction.value
-
-            # Skip this location if it is out-of-bounds
-            if not (0 <= preceding_loc.r < self.nrows and 0 <= preceding_loc.c < self.ncols):
-                continue
-
-            # Skip this location if the move `preceding_loc` -> `loc` exceeds the climbing restrictions
-            climbing_diff = self[loc] - self[preceding_loc]
-            if climbing_diff > 1:
-                continue
-
-            # Consider `preceding_loc` as a possible new location to explore
-            preceding_locs.append(preceding_loc)
-
-        # The preceding locations must be non-empty, otherwise `loc` is unreachable
-        if not preceding_loc:
-            raise RuntimeError(f"The location {loc} is unreachable.")
-            
-        recurse_locs = []
-        for preceding_loc in preceding_locs:
-            # Skip this location if it has already been visited in `acc_path`
-            if preceding_loc in acc_path:
-                continue
-            
-            # Consider the `preceding_loc` for further recursion
-            recurse_locs.append(preceding_loc)
-
-        # Recurse the solver on all `recurse_locs`, marking that we have already been to `loc`.
-        # If no non-`None` distances are found, then we got to a dead end where there is a better
-        # way to get to `self.s_loc` than this recursive branch
-        dists = list(
-            filter(lambda d: d is not None, 
-                   map(lambda rec_loc: self._solve_helper_reverse(rec_loc, acc_path | {loc}), recurse_locs)
-            )
-        )
-
-        # Return the best possible distance. If none exists, propagate the dead end `None`
-        if dists:
-            return 1 + min(dists)
-        else:
-            return None
-            
-    def solve_reverse(self):
-        return self._solve_helper_reverse(self.e_loc, set())
-
-    def _solve_frontiers_set_helper(self, *, frontiers_set, frontier):
-        """This is a frontier based algorithm and records all newly discovered locations 
-        during ``frontier`` until the end is located.
-        """
-        # Base case
-        if self.e_loc in frontiers_set:
-            return frontiers_set
-
         prev_frontier = frontier - 1
         
         # Fetch all of the coordinates that were reachable within `prev_frontier` steps
@@ -231,7 +180,7 @@ class GridSolver(Grid):
 
                 # Skip this location if the move `next_loc` -> `prev_frontier_loc` exceeds the climbing restrictions
                 climbing_diff = self[next_loc] - self[prev_frontier_loc]
-                if climbing_diff > 1:
+                if movement * climbing_diff > 1:
                     continue
 
                 # Record the `next_loc` and its parent `prev_frontier_loc` only if is has not been discovered yet
@@ -244,17 +193,34 @@ class GridSolver(Grid):
 
         # Since each location in `next_locs` was newly discovered during `frontier`, record them as such
         new_frontiers_set = frontiers_set | FrontiersSet(initial=starmap(lambda loc, parent_loc: (loc, parent_loc, frontier), next_locs))
-        
-        # Continue on the recursion, solving the next `frontier`
-        return self._solve_frontiers_set_helper(frontiers_set=new_frontiers_set, frontier=frontier+1)
-    
-    def _solve_frontiers_set(self, start):
-        return self._solve_frontiers_set_helper(frontiers_set=FrontiersSet(initial=[(start, None, 0)]), frontier=1)
+        return new_frontiers_set
 
+    def _solve_frontiers_set(self, start, end, *, movement=Movement.Forwards):
+        frontier = 0
+        frontiers_set = FrontiersSet(initial=[(start, None, frontier)])
+        while frontiers_set and end not in frontiers_set:
+            frontier += 1
+            frontiers_set = self._solve_frontiers_set_helper(frontiers_set, frontier=frontier, movement=movement)
+
+        return frontiers_set
+    
     def solve(self):
-        frontiers_set = self._solve_frontiers_set(self.s_loc)
+        frontiers_set = self._solve_frontiers_set(self.s_loc, self.e_loc)
+
+        if not frontiers_set:
+            assert ValueError(f"There exists no valid path between: {self.s_loc} -> {self.e_loc}")
+            
         return frontiers_set[self.e_loc]
 
+    def solve_until_nearest_start(self):
+        frontier = 0
+        frontiers_set = FrontiersSet(initial=[(self.e_loc, None, frontier)])
+        while frontiers_set and not any(starmap(lambda loc, _: self[loc] == ord('a'), frontiers_set)):
+            frontier += 1
+            frontiers_set = self._solve_frontiers_set_helper(frontiers_set, frontier=frontier, movement=Movement.Backwards)
+
+        return frontier
+    
     def solve_all_starts(self):
         solutions_grid = Grid([[None] * self.ncols] * self.nrows)
 
@@ -269,7 +235,7 @@ class GridSolver(Grid):
                 continue
 
             # Solve the frontiers starting from `loc` until the end location
-            frontiers_set = self._solve_frontiers_set(loc)
+            frontiers_set = self._solve_frontiers_set(loc, self.e_loc)
 
             # Ignore `loc` if no solution is found. This means that there is no path from `loc` -> `self.e_loc`
             if frontiers_set is None:
@@ -308,8 +274,11 @@ def main():
     #
     # Part 2
     #
-    solutions = grid_solver.solve_all_starts()
-    print("Part 2: ", min(starmap(lambda _, dist: dist, solutions)))
+    print("Part 2: ", grid_solver.solve_until_nearest_start())
+
+    # The less efficient forward search algorithm
+    #solutions = grid_solver.solve_all_starts()
+    #print("Part 2: ", min(starmap(lambda _, dist: dist, solutions)))    
 
 if __name__ == "__main__":
     main()
