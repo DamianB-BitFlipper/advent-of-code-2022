@@ -3,6 +3,7 @@ import re
 import time
 from functools import reduce
 from operator import mul
+from more_itertools import consume
 
 INPUT_FILE = "input.txt"
 
@@ -132,9 +133,7 @@ def main():
     monkey_gang = MonkeyGang(part1_monkeys)
     
     # Play 20 rounds of monkey business
-    for _ in range(20):
-        next(monkey_gang)
-
+    consume(monkey_gang, 20)
     print("Part 1: ", monkey_gang.monkey_business)
 
     #
@@ -148,9 +147,7 @@ def main():
     monkey_gang = MonkeyGang(part2_monkeys)
     
     # Play 10_000 rounds of monkey business
-    for _ in range(10_000):
-        next(monkey_gang)
-
+    consume(monkey_gang, 10_000)
     print("Part 2: ", monkey_gang.monkey_business)
     
 if __name__ == "__main__":
