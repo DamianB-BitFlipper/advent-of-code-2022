@@ -1,0 +1,4 @@
+name: advent-2022
+dependencies:
+  - python>=3.8
+  - more-itertools
