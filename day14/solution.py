@@ -1,3 +1,4 @@
+from typing import Generic, TypeVar
 import re
 from math import sqrt
 from functools import wraps
@@ -9,87 +10,37 @@ import copy
 
 INPUT_FILE = "input.txt"    
 
-@dataclass(frozen=True)
-class Vector():
-    x: float
-    y: float
+T = TypeVar('T', int, float, covariant=True)
 
-    def __add__(self, other):
-        return Vector(self.x + other.x, self.y + other.y)
+@dataclass(frozen=True)
+class Vector(Generic[T]):
+    x: T
+    y: T
+
+    def __add__(self, other: "Vector[T]") -> "Vector[T]":
+        return self.__class__(self.x + other.x, self.y + other.y)
     
-    def __sub__(self, other):
-        return Vector(self.x - other.x, self.y - other.y)
+    def __sub__(self, other: "Vector[T]") -> "Vector[T]":
+        return self.__class__(self.x - other.x, self.y - other.y)
     
-    def __iter__(self):
+    def __iter__(self) -> tuple[T, T]:
         return iter((self.x, self.y))
 
-    def __truediv__(self, other):
-        return Vector(self.x / other, self.y / other)
+    def __truediv__(self, other: "Vector[T]") -> "Vector[T]":
+        return self.__class__(self.x / other, self.y / other)
     
     @property
-    def length(self):
+    def length(self) -> float:
         return sqrt(self.x ** 2 + self.y ** 2)
 
     @property
-    def norm(self):
+    def norm(self) -> "Vector[float]":
         return self / self.length
 
-    def dot(self, other):
+    def dot(self, other) -> T:
         return self.x * other.x + self.y * other.y
 
-class IntVector(Vector):
-    x: int
-    y: int
-
-    @staticmethod
-    def intify(func):
-        @wraps(func)
-        def wrapped(*args, **kwargs):
-            result = func(*args, **kwargs)
-            if isinstance(result, Vector):
-                return IntVector(int(result.x), int(result.y))
-            elif isinstance(result, float):
-                return int(result)
-            elif isinstance(result, int):
-                return result
-            else:
-                raise ValueError(f"Unable to intify {result}")
-        return wrapped
-
-    #def __new__(cls, *args, **kwargs):
-    #    vector = super().__new__(cls, *args, **kwargs)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*map(int, args), **kwargs)
-    
-    @intify
-    def __add__(self, other):
-        return super().__add__(other)
-
-    @intify
-    def __sub__(self, other):
-        return super().__sub__(other)
-
-    @intify
-    def __truediv__(self, other):
-        return super().__truediv__(other)
-
-    @property
-    @intify
-    def length(self):
-        return super().length
-
-    @property
-    @intify
-    def norm(self):
-        return super().norm
-
-    @intify
-    def dot(self, other):
-        return super().dot(other)
-
-    
-class Coordinate(IntVector):
+class Coordinate(Vector[int]):
     
     @classmethod
     def from_string(cls, x, y):
@@ -97,15 +48,15 @@ class Coordinate(IntVector):
         return cls(int(x), -1 * int(y))
 
 class Direction(Enum):
-    N = IntVector(0, 1)
-    NE = IntVector(1, 1)
-    E = IntVector(1, 0)
-    SE = IntVector(1, -1)
-    S = IntVector(0, -1)    
-    SW = IntVector(-1, -1)
-    W = IntVector(-1, 0)
-    NW = IntVector(-1, 1)
-    STOP = IntVector(0, 0)
+    N = Vector(0, 1)
+    NE = Vector(1, 1)
+    E = Vector(1, 0)
+    SE = Vector(1, -1)
+    S = Vector(0, -1)    
+    SW = Vector(-1, -1)
+    W = Vector(-1, 0)
+    NW = Vector(-1, 1)
+    STOP = Vector(0, 0)
     
 class LazyCoordinateSystem():
 
