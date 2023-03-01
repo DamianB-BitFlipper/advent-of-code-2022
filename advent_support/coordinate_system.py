@@ -1,7 +1,11 @@
-from typing import Generic, TypeVar
+import typing
+from typing import Generic, TypeVar, Callable
+
 from dataclasses import dataclass
 from enum import Enum
 import copy
+import operator
+from itertools import starmap
 
 from math import sqrt
 
@@ -12,21 +16,54 @@ class Vector(Generic[T]):
     x: T
     y: T
 
-    def __add__(self, other: "Vector[T]") -> "Vector[T]":
-        return self.__class__(self.x + other.x, self.y + other.y)
+    @staticmethod
+    def dunder_broadcastable(func):
+        def wrapper(self_: "Vector[T]", other: "T | Vector[T]") -> "Vector[T]":
+            op = func()
+            
+            if isinstance(other, T.__constraints__):
+                return op(self_, Vector(other, other))
+            elif isinstance(other, Vector):
+                return self_.__class__(op(self_.x, other.x), op(self_.y, other.y))
+            else:
+                return NotImplemented
+        
+        return wrapper
+
+    @dunder_broadcastable
+    @staticmethod
+    def __add__() -> Callable[[T, T], T]:
+        return operator.add
+    __radd__ = __add__
+
     
-    def __sub__(self, other: "Vector[T]") -> "Vector[T]":
-        return self.__class__(self.x - other.x, self.y - other.y)
+    @dunder_broadcastable
+    @staticmethod
+    def __sub__() -> Callable[[T, T], T]:
+        return operator.sub
+    __rsub__ = __sub__
+
+    @dunder_broadcastable
+    @staticmethod
+    def __mul__() -> Callable[[T, T], T]:
+        return operator.mul
+    __rmul__ = __mul__
+
+    @dunder_broadcastable
+    @staticmethod
+    def __truediv__() -> Callable[[T, T], T]:
+        return operator.truediv
     
     def __iter__(self) -> tuple[T, T]:
         return iter((self.x, self.y))
-
-    def __truediv__(self, other: "Vector[T]") -> "Vector[T]":
-        return self.__class__(self.x / other, self.y / other)
     
     @property
     def length(self) -> float:
         return sqrt(self.x ** 2 + self.y ** 2)
+
+    @property
+    def manhattan(self) -> int:
+        return abs(self.x) + abs(self.y)
 
     @property
     def norm(self) -> "Vector[float]":
@@ -52,6 +89,10 @@ class Direction(Enum):
     W = Vector(-1, 0)
     NW = Vector(-1, 1)
     STOP = Vector(0, 0)
+
+    def __mul__(self, other: T | Vector[T]) -> Vector[T]:
+        return self.value * other
+    __rmul__ = __mul__
     
 class LazyCoordinateSystem():
 
@@ -120,6 +161,10 @@ class LazyCoordinateSystem():
 
     def __repr__(self):
         return str(self)
+
+    def __iter__(self):
+        # Convert all of the keys to `Coordinate`s
+        yield from starmap(lambda k, v: (Coordinate(*k), v), self.data.items())
 
     def copy(self):
         return copy.deepcopy(self)
