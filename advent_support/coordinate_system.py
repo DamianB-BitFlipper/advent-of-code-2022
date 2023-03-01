@@ -69,6 +69,10 @@ class Vector(Generic[T]):
     def norm(self) -> "Vector[float]":
         return self / self.length
 
+    @property
+    def orthogonal(self) -> "Vector[T]":
+        return self.__class__(-1 * self.y, self.x)
+    
     def dot(self, other) -> T:
         return self.x * other.x + self.y * other.y
 
